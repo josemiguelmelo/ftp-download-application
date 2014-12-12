@@ -1,10 +1,7 @@
 #include "ftp.h"
 
-
-/** Connect to ftp */
-int ftp_connect(FTP* ftp, char* ip, int port) {
-
-	int sockfd;
+int ftp_socket_connect(const char* ip, int port){
+    int sockfd;
     struct sockaddr_in server_addr;
 
     memset(&server_addr, 0, sizeof(server_addr));
@@ -17,11 +14,19 @@ int ftp_connect(FTP* ftp, char* ip, int port) {
         exit(-1);
     }
 
-	/** connect to server. if error, exit with code -2. */
+    /** connect to server. if error, exit with code -2. */
     if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("connect");
         exit(-2);
     }
+    return sockfd;
+}
+
+
+/** Connect to ftp */
+int ftp_connect(FTP* ftp, char* ip, int port) {
+
+	int sockfd = ftp_socket_connect(ip, port);
 
     if (sockfd < 0) {
         perror("connect_socket");
@@ -30,7 +35,7 @@ int ftp_connect(FTP* ftp, char* ip, int port) {
 
     ftp->socket_fd = sockfd;
     
-//    usleep(500000); // sleep half a second
+    usleep(500000); // sleep half a second
 
     char str[1024] = "";
     
@@ -105,6 +110,8 @@ int ftp_passive_mode(FTP * ftp){
         return answer;
     }
 
+    //printf("%s\n", answer_received);
+
     int a1, a2, a3, a4, p1, p2; 	// a1..a4 -> ip's   ;  p1,p2 -> ports
     error = sscanf(answer_received, "227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)", &a1, &a2, &a3, &a4, &p1, &p2);
     if (error < 0) {
@@ -114,13 +121,13 @@ int ftp_passive_mode(FTP * ftp){
 
     // port = p1*256 + p2
     int final_port;
-    char final_ip[16] = "";
+    char final_ip[32] = "";
     
     final_port = p1 * 256 + p2;
     sprintf(final_ip, "%d.%d.%d.%d", a1, a2, a3, a4);
     
+    ftp_socket_connect(final_ip, final_port);
 
-    ftp_connect(ftp, final_ip, final_port);
     if (ftp->socket_fd < 0) {
         perror("connect_socket");
         return 0;
@@ -147,8 +154,7 @@ int ftp_change_dir(FTP* ftp, char* directory_path){
 /** send command to ftp. */
 int ftp_send_cmd(FTP* ftp,  char* cmd){
 	ssize_t wrote = write(ftp->socket_fd, cmd, strlen(cmd));
-    if (wrote == 0)
-    {
+    if (wrote == 0) {
         perror("write command");
         return -1;
     }
@@ -193,7 +199,7 @@ int ftp_read(FTP * ftp, char* cmd, int size){
         perror("read");	// error reading from ftp
         return -1;
     }
-    //printf("%.*s\n", (int)bytes_read, cmd);
+    //printf("%.*s\n", (int)read_result, cmd);
     return 0;
 }
 
@@ -222,7 +228,7 @@ int ftp_download(FTP* ftp, URL * url) {
         fprintf(stderr, "Error retrieving file\n");
         return -1;
     }
-
+    printf("file retrieved");
     FILE* file = fopen(url->file_name, "w");
     if (file == NULL) {
         perror("open file");
@@ -263,6 +269,12 @@ void reverse_string(char str[]){
     strcpy(str,temp);
 }
 
+void removeSubstring(char *s,const char *toremove)
+{
+  while( strstr(s,toremove) )
+    memmove(s,s+strlen(toremove),1+strlen(s+strlen(toremove)));
+}
+
 /** get url from string */
 int url_parser(URL * url, char * url_string){
 
@@ -273,20 +285,21 @@ int url_parser(URL * url, char * url_string){
         printf("User: %s\n", url->user);
         printf("Pass: %s\n", url->password);
         printf("Host: %s\n", url->host);
-        printf("Path: %s\n", url->path);
+       // printf("Path: %s\n", url->path);
     }
     // if not inserted user
     else if(sscanf(url_string, REGEX_WITHOUT_USER, url->host, url->path) == 2){
         printf("Host: %s\n", url->host);
-        printf("Path: %s\n", url->path);
+        //printf("Path: %s\n", url->path);
         strcpy(url->user, "anonymous");
-        strcpy(url->password, "password");
+        strcpy(url->password, "pass");
     }
     // if usage error
     else{
         fprintf(stderr,"Invalid URL!\n Usage: download ftp://[<user>:<password>@]<host>/<url-path>");
         exit(1);
     }
+    printf("\n");
 
     if ((h=gethostbyname(url->host)) == NULL) {
         herror("gethostbyname");
@@ -311,6 +324,8 @@ int url_parser(URL * url, char * url_string){
     reverse_string(file);
     // set file name
     url->file_name = file;
+    // remove file from path
+    removeSubstring(url->path, url->file_name);
 
     return 0;
 }
@@ -321,7 +336,7 @@ int main(int argc, char* argv[]){
 		printf("Usage: download ftp://[<user>:<password>@]<host>/<url-path>");
 		return -1;
 	}
-    printf("out");
+    
     /** structs with url and ftp */
     URL url;
     FTP ftp;
@@ -331,6 +346,7 @@ int main(int argc, char* argv[]){
     url_parser(&url, argv[1]);
 
     
+    printf("Connecting to ftp...\n");
     // connect via ftp to host_ip through SERVER_PORT
     int connection_result = ftp_connect(&ftp, url.host_ip, SERVER_PORT);
     // error connecting ftp
@@ -338,7 +354,10 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Error connecting to ftp\n");
         return -1;
     }
+    printf("Connected successfully.\n\n");
 
+
+    printf("Logging in...\n");
     // login with user credentials
     int login_result = ftp_login(&ftp, url.user, url.password);
     // error logging in
@@ -346,16 +365,11 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Login error. Invalid username or password.\n");
         return -1;
     }
+    printf("Successfully logged in.\n\n");
 
 
-    // change to path given in ftp
-    int change_path_result = ftp_change_dir(&ftp, url.path);
-    // error changing to path given
-    if(change_path_result!=0){
-        fprintf(stderr, "Error changing to path %s\n", url.path);
-        return -1;
-    }
 
+    printf("Changing to passive mode...\n");
     // change connection to passive move
     int change_passive_mode_result = ftp_passive_mode(&ftp);
     // error changing to passive mode
@@ -363,9 +377,22 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Error changing to passive mode\n");
         return -1;
     }
+    printf("Changed successfully to passive mode.\n\n");
 
 
-    
+
+    printf("Changing to given path...\n");
+    // change to path given in ftp
+    int change_path_result = ftp_change_dir(&ftp, url.path);
+    // error changing to path given
+    if(change_path_result!=0){
+        fprintf(stderr, "Error changing to path %s\n", url.path);
+        return -1;
+    }
+    printf("Changed to to ftp...\n\n");
+
+
+    printf("Downloading file...\n");
     // download file from ftp server
     int download_file_result = ftp_download(&ftp, &url);
     // error changing to passive mode
@@ -373,7 +400,10 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Error downloading file\n");
         return -1;
     }
+    printf("File downloaded successfully.\n\n");
 
+
+    printf("Disconnecting from ftp...\n");
     // disconnect from ftp server
     int disconnect_result = ftp_disconnect(&ftp);
     // error disconnecting from ftp server
@@ -381,6 +411,7 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Error disconnecting from ftp server\n");
         return -1;
     }
+    printf("Successfully disconnected.\n\n");
 
-
+    return 0;
 }

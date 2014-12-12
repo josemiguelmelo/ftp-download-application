@@ -66,11 +66,11 @@ int ftp_disconnect(FTP* ftp) {
 	user command ---> USER username
 	password command ---> PASS password
 */
-int ftp_login(FTP* ftp, char* user, char* password){
-	char cmd[1024] = "";
+    int ftp_login(FTP* ftp, char* user, char* password){
+       char cmd[1024] = "";
 
     sprintf(cmd, "USER %s\r\n", user); // cmd => USER $user
-	int sent_user_successfully = ftp_send_cmd_read_after(ftp, cmd);
+    int sent_user_successfully = ftp_send_cmd_read_after(ftp, cmd);
 
     if (sent_user_successfully != 0){
         perror("ftp_login (USER)");
@@ -78,7 +78,7 @@ int ftp_login(FTP* ftp, char* user, char* password){
     }
 
     sprintf(cmd, "PASS %s\r\n", password); // cmd => PASS $password
-	int sent_password_successfully = ftp_send_cmd_read_after(ftp, cmd);
+    int sent_password_successfully = ftp_send_cmd_read_after(ftp, cmd);
 
     if (sent_password_successfully != 0){
         perror("ftp_login (PASS)");
@@ -95,21 +95,21 @@ The server will respond with the address of the port it is listening on, with a 
 		227 Entering Passive Mode (a1,a2,a3,a4,p1,p2)
 		where a1.a2.a3.a4 is the IP address and p1*256+p2 is the port number.
 */
-int ftp_passive_mode(FTP * ftp){
-	char cmd[1024] = "PASV\r\n";
-	char answer_received[1024];
-    int error = ftp_send_cmd(ftp, cmd);
-    if (error!=0) {
-        perror("passive move send cmd (CWD)");
-        return error;
-    }
-    sleep(1);
+        int ftp_passive_mode(FTP * ftp){
+           char cmd[1024] = "PASV\r\n";
+           char answer_received[1024];
+           int error = ftp_send_cmd(ftp, cmd);
+           if (error!=0) {
+            perror("passive move send cmd (CWD)");
+            return error;
+        }
+        sleep(1);
     // read answer
-    int answer = ftp_read(ftp, answer_received, sizeof(answer_received));
-    if (answer) {
-        perror("passive move read");
-        return answer;
-    }
+        int answer = ftp_read(ftp, answer_received, sizeof(answer_received));
+        if (answer) {
+            perror("passive move read");
+            return answer;
+        }
 
     //printf("%s\n", answer_received);
 
@@ -167,7 +167,7 @@ int ftp_send_cmd(FTP* ftp,  char* cmd){
 
 /** send command to ftp and read answer after sending */
 int ftp_send_cmd_read_after(FTP *ftp, char *cmd) {
-   
+ 
     ssize_t written = write(ftp->socket_fd, cmd, strlen(cmd));
     if (written == 0){
         perror("write");	// error writing to ftp
@@ -189,7 +189,7 @@ int ftp_send_cmd_read_after(FTP *ftp, char *cmd) {
 		  *     4xx ----> Transient Negative Completion reply
 		  *     5xx ----> Permanent Negative Completion reply
     */
-    if (str[0] == '4' || str[0] == '5') {
+          if (str[0] == '4' || str[0] == '5') {
         return str[0];	// return server error code
     }
 
@@ -243,7 +243,6 @@ int ftp_download(FTP* ftp, URL * url) {
     int len;
     while ((len = read(ftp->data_socket_fd, receive_buffer, 255))>0) {
         receive_buffer[len]='\0';
-        printf("%d %s\n", len, receive_buffer);
         int error = fwrite(receive_buffer, 1, len, file);
         if (error < 0) {
             perror("fwrite");
@@ -329,7 +328,8 @@ int url_parser(URL * url, char * url_string){
     // set file name
     strcpy(url->file_name,file);
     // remove file from path
-    removeSubstring(url->path, url->file_name);
+    strtok(url->path, delim);
+
 
     return 0;
 }
@@ -354,6 +354,7 @@ int main(int argc, char* argv[]){
 
     // get url from argument and insert into struct URL
     url_parser(&url, argv[1]);
+
     
     printf("Connecting to ftp...\n");
     // connect via ftp to host_ip through SERVER_PORT

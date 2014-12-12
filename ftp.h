@@ -19,6 +19,7 @@
 
 typedef struct FTP{
 	int socket_fd; // socket file descriptor
+	int socket_fd_pasv; // socket file descriptor passive mode
 	int data_socket_fd; // data socket file descriptor
 } FTP;
 

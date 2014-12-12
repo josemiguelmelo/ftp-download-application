@@ -103,6 +103,7 @@ int ftp_passive_mode(FTP * ftp){
         perror("passive move send cmd (CWD)");
         return error;
     }
+    sleep(1);
     // read answer
     int answer = ftp_read(ftp, answer_received, sizeof(answer_received));
     if (answer) {
@@ -125,17 +126,15 @@ int ftp_passive_mode(FTP * ftp){
     
     final_port = p1 * 256 + p2;
     sprintf(final_ip, "%d.%d.%d.%d", a1, a2, a3, a4);
-    
-    ftp_socket_connect(final_ip, final_port);
 
-    if (ftp->socket_fd < 0) {
+    ftp->data_socket_fd = ftp_socket_connect(final_ip, final_port);
+
+    if (ftp->data_socket_fd < 0) {
         perror("connect_socket");
         return 0;
     }
 
-    ftp->data_socket_fd = ftp->socket_fd;
-
-    usleep(500000); // sleep half a second
+    sleep(1);
 
     return 0;
 }
@@ -143,8 +142,13 @@ int ftp_passive_mode(FTP * ftp){
 /** change ftp current current directory. Command used: CWD directory */
 int ftp_change_dir(FTP* ftp, char* directory_path){
 	char cmd[1024] = "";
-    sprintf(cmd, "CWD %s\r\n", directory_path);	// cmd => CWD $directory_path
+    sprintf(cmd, "cwd %s\r\n", directory_path);	// cmd => CWD $directory_path
     int sent_cmd_successfully = ftp_send_cmd(ftp, cmd);
+    sleep(1);
+    char rec [256];
+    ftp_read(ftp, rec, 256);
+    printf("%s\n", rec );
+
     if (sent_cmd_successfully!=0){
         perror("ftp_cwd");
         return sent_cmd_successfully;
@@ -170,7 +174,7 @@ int ftp_send_cmd_read_after(FTP *ftp, char *cmd) {
         return -1;
     }
 
-    usleep(100000);
+    sleep(1);
 
     char str[1024] = "";
     ssize_t read_return = ftp_read(ftp, str, sizeof(str));
@@ -195,6 +199,7 @@ int ftp_send_cmd_read_after(FTP *ftp, char *cmd) {
 /** read from ftp */
 int ftp_read(FTP * ftp, char* cmd, int size){
 	int read_result = read(ftp->socket_fd, cmd, size);
+
     if (read_result==0){
         perror("read");	// error reading from ftp
         return -1;
@@ -211,8 +216,8 @@ int ftp_retrieve_file(FTP * ftp, URL * url){
     char cmd[1024] = "";
     sprintf(cmd, "RETR %s\r\n", url->file_name);
     int send_cmd_response = ftp_send_cmd_read_after(ftp, cmd);
-    if (send_cmd_response != 0)
-    {
+    sleep(1);
+    if (send_cmd_response != 0) {
         perror("retrieve file");
         return send_cmd_response;
     }
@@ -228,22 +233,18 @@ int ftp_download(FTP* ftp, URL * url) {
         fprintf(stderr, "Error retrieving file\n");
         return -1;
     }
-    printf("file retrieved");
-    FILE* file = fopen(url->file_name, "w");
+
+    FILE* file = fopen(url->file_name, "wb");
     if (file == NULL) {
         perror("open file");
         return -1;
     }
-
     char receive_buffer[256];
     int len;
-    while ((len = read(ftp->data_socket_fd, receive_buffer, sizeof(receive_buffer)))) {
-        if (len < 0) {
-            perror("read");
-            return len;
-        }
-
-        int error = fwrite(receive_buffer, len, 1, file);
+    while ((len = read(ftp->data_socket_fd, receive_buffer, 255))>0) {
+        receive_buffer[len]='\0';
+        printf("%d %s\n", len, receive_buffer);
+        int error = fwrite(receive_buffer, 1, len, file);
         if (error < 0) {
             perror("fwrite");
             return error;
@@ -305,6 +306,7 @@ int url_parser(URL * url, char * url_string){
         herror("gethostbyname");
         exit(2);
     }
+
     // set host ip
     url->host_ip = inet_ntoa(*((struct in_addr *)h->h_addr));
 
@@ -320,14 +322,19 @@ int url_parser(URL * url, char * url_string){
     const char delim[2] = "/";
     // get first string until delim is found (file name)
     file = strtok(temp_path, delim);
+
     // reverse file name
     reverse_string(file);
     // set file name
-    url->file_name = file;
+    strcpy(url->file_name,file);
     // remove file from path
     removeSubstring(url->path, url->file_name);
 
     return 0;
+}
+void url_initialize(URL * url){
+    url->file_name=  (char*) malloc (256);
+    url->host_ip=  (char*) malloc (256);
 }
 
 int main(int argc, char* argv[]){
@@ -341,10 +348,11 @@ int main(int argc, char* argv[]){
     URL url;
     FTP ftp;
 
+    // initialize url
+    url_initialize(&url);
 
     // get url from argument and insert into struct URL
     url_parser(&url, argv[1]);
-
     
     printf("Connecting to ftp...\n");
     // connect via ftp to host_ip through SERVER_PORT
@@ -368,7 +376,6 @@ int main(int argc, char* argv[]){
     printf("Successfully logged in.\n\n");
 
 
-
     printf("Changing to passive mode...\n");
     // change connection to passive move
     int change_passive_mode_result = ftp_passive_mode(&ftp);
@@ -379,18 +386,17 @@ int main(int argc, char* argv[]){
     }
     printf("Changed successfully to passive mode.\n\n");
 
-
-
-    printf("Changing to given path...\n");
-    // change to path given in ftp
-    int change_path_result = ftp_change_dir(&ftp, url.path);
-    // error changing to path given
-    if(change_path_result!=0){
-        fprintf(stderr, "Error changing to path %s\n", url.path);
-        return -1;
+    if(strcmp(url.path, "")){
+        printf("Changing to given path...\n");
+        // change to path given in ftp
+        int change_path_result = ftp_change_dir(&ftp, url.path);
+        // error changing to path given
+        if(change_path_result!=0){
+            fprintf(stderr, "Error changing to path %s\n", url.path);
+            return -1;
+        }
+        printf("Changed to to ftp...\n\n");
     }
-    printf("Changed to to ftp...\n\n");
-
 
     printf("Downloading file...\n");
     // download file from ftp server

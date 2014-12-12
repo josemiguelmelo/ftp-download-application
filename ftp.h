@@ -61,4 +61,6 @@ void reverse_string(char str[]);
 
 int url_parser(URL * url, char * url_string);
 
+void url_initialize(URL * url);
+
 #endif

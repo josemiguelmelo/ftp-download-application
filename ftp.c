@@ -272,8 +272,9 @@ void reverse_string(char str[]){
 
 void removeSubstring(char *s,const char *toremove)
 {
-  while( strstr(s,toremove) )
-    memmove(s,s+strlen(toremove),1+strlen(s+strlen(toremove)));
+    while( strstr(s,toremove) ){
+        memmove(s,s+strlen(toremove),1+strlen(s+strlen(toremove)));
+    }
 }
 
 /** get url from string */

@@ -15,6 +15,7 @@ The application was implemented in C and uses sockets to connect to the server a
 #####Compilation
 
 To compile the application run this command on the terminal:
+
 `make`
 
 #####Run

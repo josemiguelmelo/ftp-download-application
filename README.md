@@ -20,11 +20,11 @@ To compile the application run this command on the terminal:
 #####Run
 
 To run the application (after compiling) just run this command:
-'''
+```
 ./download ftp://[<user>:<password>@]<host>/<url-path>
 
 <user> - login username
 <password> - login password
 <host> - ftp server to connect
 <url-path> - file location in server
-'''
+```

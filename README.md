@@ -1,24 +1,24 @@
 ftp-download-application
 ========================
 
-###Description
+### Description
 
 Implementation of an ftp application, which allows the user to download a specific file from an ftp server.
 
 
-###Implementation
+### Implementation
 
 The application was implemented in C and uses sockets to connect to the server and retrieve files.
 
-###Usage
+### Usage
 
-#####Compilation
+##### Compilation
 
 To compile the application run this command on the terminal:
 
 `make`
 
-#####Run
+##### Run
 
 To run the application (after compiling) just run this command:
 ```
